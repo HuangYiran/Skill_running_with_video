@@ -8,6 +8,8 @@ Environment variables:
   SMTP_PASS       optional
   SMTP_FROM       default: noreply@localhost
   SMTP_USE_TLS    default: false
+  TARGET_EMAIL    optional default recipient
+  TARGET_EMAIL_FILE default: config/target_email.txt
 """
 
 from __future__ import annotations
@@ -22,7 +24,12 @@ from email.message import EmailMessage
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Send summary email via SMTP")
-    parser.add_argument("--to", required=True, help="Recipient email address")
+    parser.add_argument("--to", required=False, help="Recipient email address")
+    parser.add_argument(
+        "--to-file",
+        default=os.getenv("TARGET_EMAIL_FILE", "config/target_email.txt"),
+        help="Path to default recipient email file when --to is omitted",
+    )
     parser.add_argument("--subject", required=True, help="Email subject")
     parser.add_argument(
         "--body-file",
@@ -35,6 +42,24 @@ def parse_args() -> argparse.Namespace:
 def load_body(body_file: str) -> str:
     path = pathlib.Path(body_file).resolve()
     return path.read_text(encoding="utf-8")
+
+
+def resolve_recipient(to_addr: str | None, to_file: str) -> str | None:
+    if to_addr and to_addr.strip():
+        return to_addr.strip()
+
+    env_to = os.getenv("TARGET_EMAIL")
+    if env_to and env_to.strip():
+        return env_to.strip()
+
+    path = pathlib.Path(to_file).resolve()
+    if not path.exists():
+        return None
+
+    default_to = path.read_text(encoding="utf-8").strip()
+    if not default_to:
+        return None
+    return default_to
 
 
 def build_message(to_addr: str, subject: str, body: str) -> EmailMessage:
@@ -80,8 +105,13 @@ def send(msg: EmailMessage) -> tuple[bool, str]:
 
 def main() -> None:
     args = parse_args()
+    recipient = resolve_recipient(args.to, args.to_file)
+    if not recipient:
+        raise SystemExit(
+            "Recipient is required: pass --to, set TARGET_EMAIL, or provide TARGET_EMAIL_FILE"
+        )
     body = load_body(args.body_file)
-    msg = build_message(args.to, args.subject, body)
+    msg = build_message(recipient, args.subject, body)
     ok, message = send(msg)
     print(message)
     if not ok:

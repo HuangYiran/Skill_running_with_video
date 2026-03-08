@@ -1,10 +1,10 @@
 任务来源: Feishu Webhook
-任务内容: Add detailed to readme file. Project object is robot arm control.
+任务内容: chang the target email to ihuangyiran@icloud.com
 
 代码修改摘要:
-1. 重写并扩展 README.md，主题改为 Robot Arm Control Project，补充了项目目标、当前范围与后续扩展方向。
-2. 在 README 中新增并细化了机器人机械臂控制相关内容，包括目录意图、控制模块未来结构、开发流程、安全约束和分阶段路线图。
-3. 保留并兼容现有测试约束所需章节（Overview / Current Repository Structure / Getting Started / Development Workflow / Testing / Contributing），确保回归测试可通过。
+1. 新增默认收件人配置文件 `config/target_email.txt`，并将目标邮箱设置为 `ihuangyiran@icloud.com`。
+2. 更新 `tools/send_email.py`：`--to` 改为可选，新增 `--to-file` 参数；当未传 `--to` 时，按顺序从 `TARGET_EMAIL` 环境变量或配置文件读取默认收件人。
+3. 新增 `tests/test_send_email.py`，覆盖收件人解析逻辑（CLI 优先、环境变量回退、配置文件回退、缺省返回 None）。
 
 测试执行结果:
 - 命令: ./scripts/run_tests.sh
@@ -12,8 +12,13 @@
   - test_readme_exists: passed
   - test_readme_has_meaningful_length: passed
   - test_readme_has_required_sections: passed
-  - 总计: 3 passed, 0 failed
+  - test_resolve_recipient_prefers_cli_value: passed
+  - test_resolve_recipient_reads_default_file: passed
+  - test_resolve_recipient_returns_none_when_missing: passed
+  - test_resolve_recipient_uses_env_when_cli_missing: passed
+  - 总计: 7 passed, 0 failed
 
 邮件发送说明:
 - 使用工具: python3 tools/send_email.py
-- 收件人: huangyiran@autel.com
+- 收件人: ihuangyiran@icloud.com
+- 发送结果: SMTP failed, fallback written to .email_fallback/email_20260308_055528.txt
