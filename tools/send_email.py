@@ -8,6 +8,7 @@ Environment variables:
   SMTP_PASS       optional
   SMTP_FROM       default: noreply@localhost
   SMTP_USE_TLS    default: false
+  SMTP_USE_SSL    default: false
   TARGET_EMAIL    optional default recipient
   TARGET_EMAIL_FILE default: config/target_email.txt
 """
@@ -19,6 +20,7 @@ import datetime as dt
 import os
 import pathlib
 import smtplib
+import ssl
 from email.message import EmailMessage
 
 
@@ -35,6 +37,14 @@ def parse_args() -> argparse.Namespace:
         "--body-file",
         required=True,
         help="Path to a text file that contains email body content",
+    )
+    parser.add_argument(
+        "--allow-fallback-success",
+        action="store_true",
+        help=(
+            "Treat local fallback artifact as success when SMTP delivery fails. "
+            "By default, delivery failures exit with code 1."
+        ),
     )
     return parser.parse_args()
 
@@ -78,15 +88,21 @@ def send(msg: EmailMessage) -> tuple[bool, str]:
     user = os.getenv("SMTP_USER")
     password = os.getenv("SMTP_PASS")
     use_tls = os.getenv("SMTP_USE_TLS", "false").lower() in {"1", "true", "yes"}
+    use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() in {"1", "true", "yes"}
 
     try:
-        with smtplib.SMTP(host=host, port=port, timeout=15) as server:
-            if use_tls:
-                server.starttls()
+        smtp_cls = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+        with smtp_cls(host=host, port=port, timeout=15) as server:
+            if not use_ssl:
+                server.ehlo()
+            if use_tls and not use_ssl:
+                server.starttls(context=ssl.create_default_context())
+                server.ehlo()
             if user and password:
                 server.login(user, password)
             server.send_message(msg)
-        return True, f"Email sent successfully via {host}:{port}"
+        protocol = "smtps" if use_ssl else "smtp"
+        return True, f"Email sent successfully via {protocol}://{host}:{port}"
     except Exception as exc:  # pragma: no cover - operational fallback
         fallback_dir = pathlib.Path(".email_fallback")
         fallback_dir.mkdir(parents=True, exist_ok=True)
@@ -116,7 +132,9 @@ def main() -> None:
     print(message)
     if not ok:
         # Fallback artifact is already written for manual relay.
-        raise SystemExit(0)
+        if args.allow_fallback_success:
+            raise SystemExit(0)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

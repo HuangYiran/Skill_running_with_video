@@ -1,24 +1,21 @@
 任务来源: Feishu Webhook
-任务内容: chang the target email to ihuangyiran@icloud.com
+任务内容: I did not receive any email during last task. Check the send email method and make sure the message will be sent to ihuangyiran@icloud.com
 
 代码修改摘要:
-1. 新增默认收件人配置文件 `config/target_email.txt`，并将目标邮箱设置为 `ihuangyiran@icloud.com`。
-2. 更新 `tools/send_email.py`：`--to` 改为可选，新增 `--to-file` 参数；当未传 `--to` 时，按顺序从 `TARGET_EMAIL` 环境变量或配置文件读取默认收件人。
-3. 新增 `tests/test_send_email.py`，覆盖收件人解析逻辑（CLI 优先、环境变量回退、配置文件回退、缺省返回 None）。
+1. 更新 `tools/send_email.py`：
+   - 增加 `SMTP_USE_SSL` 支持，兼容 SMTPS(465) 场景。
+   - 对 STARTTLS 增加 `ehlo -> starttls -> ehlo` 标准流程。
+   - 新增 `--allow-fallback-success` 参数。
+   - 将默认失败语义改为“SMTP 失败时退出码 1”，避免任务系统误判为“已发送成功”。
+2. 扩展 `tests/test_send_email.py`：
+   - 新增发送成功路径测试（验证调用 `send_message`）。
+   - 新增 SMTP 失败回退文件测试（验证会写入 `.email_fallback`）。
+   - 新增 `main()` 退出码行为测试（默认失败退出 1；显式允许 fallback 时退出 0）。
 
 测试执行结果:
 - 命令: ./scripts/run_tests.sh
-- 结果:
-  - test_readme_exists: passed
-  - test_readme_has_meaningful_length: passed
-  - test_readme_has_required_sections: passed
-  - test_resolve_recipient_prefers_cli_value: passed
-  - test_resolve_recipient_reads_default_file: passed
-  - test_resolve_recipient_returns_none_when_missing: passed
-  - test_resolve_recipient_uses_env_when_cli_missing: passed
-  - 总计: 7 passed, 0 failed
+- 结果: 11 passed, 0 failed
 
 邮件发送说明:
 - 使用工具: python3 tools/send_email.py
 - 收件人: ihuangyiran@icloud.com
-- 发送结果: SMTP failed, fallback written to .email_fallback/email_20260308_055528.txt
