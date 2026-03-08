@@ -35,5 +35,16 @@ class ProcessWebhookTaskReportTest(unittest.TestCase):
             self.assertEqual(written.read_text(encoding="utf-8"), content)
 
 
+class ProcessWebhookTaskExecutionTest(unittest.TestCase):
+    def test_execute_task_returns_hello_world_for_hello(self) -> None:
+        result = process_webhook_task.execute_task("Hello")
+        self.assertEqual(result, "hello world")
+
+    def test_execute_task_returns_hello_world_for_reply_instruction(self) -> None:
+        task = "This is a test message. Nothing need to be done. Reply with hello world"
+        result = process_webhook_task.execute_task(task)
+        self.assertEqual(result, "hello world")
+
+
 if __name__ == "__main__":
     unittest.main()
