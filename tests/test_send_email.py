@@ -71,6 +71,11 @@ class SendEmailDeliveryTest(unittest.TestCase):
                 (pathlib.Path(tmp_dir) / ".email_fallback").glob("email_*.txt")
             )
             self.assertEqual(len(fallback_files), 1)
+            self.assertRegex(
+                fallback_files[0].name,
+                r"^email_\d{8}_\d{6}\.txt$",
+                "Fallback filename should include timestamp stamp YYYYMMDD_HHMMSS",
+            )
             fallback_content = fallback_files[0].read_text(encoding="utf-8")
 
         self.assertFalse(ok)
