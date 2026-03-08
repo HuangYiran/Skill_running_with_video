@@ -82,6 +82,40 @@ def build_message(to_addr: str, subject: str, body: str) -> EmailMessage:
     return msg
 
 
+def build_smtp_info_request(
+    *,
+    exc: Exception,
+    host: str,
+    port: int,
+    use_tls: bool,
+    use_ssl: bool,
+    user: str | None,
+    has_password: bool,
+    from_addr: str | None,
+    to_addr: str | None,
+) -> str:
+    auth_mode = "username+password" if user and has_password else "none-or-incomplete"
+    transport = "smtps" if use_ssl else "smtp"
+    return "\n".join(
+        [
+            "Please provide the following information to troubleshoot SMTP failure:",
+            f"- Full SMTP error output (current error: {exc!r})",
+            f"- SMTP endpoint confirmation: {transport}://{host}:{port}",
+            f"- Encryption mode confirmation: SMTP_USE_TLS={use_tls}, SMTP_USE_SSL={use_ssl}",
+            f"- Auth mode used by provider: {auth_mode}",
+            (
+                "- Network check from runtime host: "
+                f"`nc -vz {host} {port}` or equivalent connectivity result"
+            ),
+            (
+                "- Provider policy details: app password/OAuth requirement, "
+                "allowed sender domain"
+            ),
+            f"- Envelope info used: FROM={from_addr or ''}, TO={to_addr or ''}",
+        ]
+    )
+
+
 def send(msg: EmailMessage) -> tuple[bool, str]:
     host = os.getenv("SMTP_HOST", "localhost")
     port = int(os.getenv("SMTP_PORT", "25"))
@@ -104,6 +138,17 @@ def send(msg: EmailMessage) -> tuple[bool, str]:
         protocol = "smtps" if use_ssl else "smtp"
         return True, f"Email sent successfully via {protocol}://{host}:{port}"
     except Exception as exc:  # pragma: no cover - operational fallback
+        info_request = build_smtp_info_request(
+            exc=exc,
+            host=host,
+            port=port,
+            use_tls=use_tls,
+            use_ssl=use_ssl,
+            user=user,
+            has_password=bool(password),
+            from_addr=msg.get("From"),
+            to_addr=msg.get("To"),
+        )
         fallback_dir = pathlib.Path(".email_fallback")
         fallback_dir.mkdir(parents=True, exist_ok=True)
         ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -113,10 +158,16 @@ def send(msg: EmailMessage) -> tuple[bool, str]:
             f"From: {msg.get('From')}\n"
             f"To: {msg.get('To')}\n"
             f"Subject: {msg.get('Subject')}\n\n"
+            f"{info_request}\n\n"
             f"{msg.get_content()}",
             encoding="utf-8",
         )
-        return False, f"SMTP failed, fallback written to {fallback_file}"
+        return (
+            False,
+            "SMTP failed. "
+            f"{info_request.splitlines()[0]} "
+            f"Fallback written to {fallback_file}",
+        )
 
 
 def main() -> None:

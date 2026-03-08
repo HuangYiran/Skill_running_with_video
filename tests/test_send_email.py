@@ -51,6 +51,7 @@ class SendEmailDeliveryTest(unittest.TestCase):
         fake_server.send_message.assert_called_once()
 
     def test_send_failure_writes_fallback_file(self) -> None:
+        fallback_content = ""
         with tempfile.TemporaryDirectory() as tmp_dir:
             original_cwd = os.getcwd()
             os.chdir(tmp_dir)
@@ -69,10 +70,34 @@ class SendEmailDeliveryTest(unittest.TestCase):
             fallback_files = list(
                 (pathlib.Path(tmp_dir) / ".email_fallback").glob("email_*.txt")
             )
+            self.assertEqual(len(fallback_files), 1)
+            fallback_content = fallback_files[0].read_text(encoding="utf-8")
 
         self.assertFalse(ok)
         self.assertIn("SMTP failed", message)
-        self.assertEqual(len(fallback_files), 1)
+        self.assertIn(
+            "Please provide the following information to troubleshoot SMTP failure:",
+            fallback_content,
+        )
+
+
+class SendEmailFailureDiagnosticsTest(unittest.TestCase):
+    def test_build_smtp_info_request_contains_actionable_fields(self) -> None:
+        diagnostic = send_email.build_smtp_info_request(
+            exc=RuntimeError("smtp down"),
+            host="smtp.example.com",
+            port=587,
+            use_tls=True,
+            use_ssl=False,
+            user="robot@example.com",
+            has_password=True,
+            from_addr="robot@example.com",
+            to_addr="ihuangyiran@icloud.com",
+        )
+        self.assertIn("Full SMTP error output", diagnostic)
+        self.assertIn("smtp://smtp.example.com:587", diagnostic)
+        self.assertIn("SMTP_USE_TLS=True, SMTP_USE_SSL=False", diagnostic)
+        self.assertIn("app password/OAuth requirement", diagnostic)
 
 
 class SendEmailMainExitCodeTest(unittest.TestCase):
